@@ -31,23 +31,25 @@ async function main() {
   const baseUrl = option(args, "--base-url", "https://technocore.chat");
   let room;
   let did;
+  let records;
   if (command === "from-link") {
     const messageUrl = option(args, "--message-url");
     if (!messageUrl) throw new Error("--message-url is required with from-link");
-    ({ room, did } = await resolveDidFromPermalink(messageUrl, { baseUrl }));
+    ({ room, did, records } = await resolveDidFromPermalink(messageUrl, { baseUrl }));
   } else {
     room = validateRoom(option(args, "--room"));
     did = validateDid(option(args, "--did"));
   }
   const out = option(args, "--out", `evidence/${room}-${did.slice(-8)}`);
   let jsonl;
-  if (command === "export" || command === "from-link") jsonl = await fetchRoomExport(baseUrl, room);
+  if (command === "export") jsonl = await fetchRoomExport(baseUrl, room);
   else if (command === "import") {
     const input = option(args, "--input");
     if (!input) throw new Error("--input is required with import");
     jsonl = await readFile(input, "utf8");
   } else throw new Error(`unknown command: ${command}`);
-  await writeEvidence(out, makeEvidence({ baseUrl, room, did, records: parseJsonl(jsonl) }));
+  if (!records) records = parseJsonl(jsonl);
+  await writeEvidence(out, makeEvidence({ baseUrl, room, did, records }));
 }
 
 main().catch((error) => {

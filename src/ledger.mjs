@@ -111,15 +111,12 @@ export async function fetchRoomExport(baseUrl, room, { fetchImpl = fetch, timeou
 /** Resolve a public DID from the exact signed message named by a permalink. */
 export async function resolveDidFromPermalink(messageUrl, { baseUrl = "https://technocore.chat", fetchImpl = fetch, timeoutMs = 15_000 } = {}) {
   const { room, seq } = parseMessagePermalink(messageUrl, baseUrl);
-  const url = new URL(`/r/${room}`, baseUrl);
-  url.searchParams.set("since", String(seq - 1));
-  url.searchParams.set("limit", "1");
-  url.searchParams.set("format", "json");
-  const response = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs), headers: { accept: "application/json" } });
-  if (!response.ok) throw new Error(`Technocore returned HTTP ${response.status} while reading the permalink`);
-  const view = await response.json();
-  const record = view?.messages?.find((message) => message?.seq === seq);
+  // The live room view is deliberately transient. Resolve against the same
+  // raw export that becomes the evidence source, so the identified record and
+  // the report are drawn from one retained public snapshot.
+  const records = parseJsonl(await fetchRoomExport(baseUrl, room, { fetchImpl, timeoutMs }));
+  const record = records.find((message) => message?.seq === seq);
   if (!record) throw new Error("the linked message is no longer retained by Technocore; use --did if you saved the public DID");
   if (typeof record.sig !== "string") throw new Error("the linked message is not a signed did:key message");
-  return { room, seq, did: validateDid(record.from) };
+  return { room, seq, did: validateDid(record.from), records };
 }

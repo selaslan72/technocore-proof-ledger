@@ -24,15 +24,15 @@ test("rejects malformed JSONL", () => {
 
 test("resolves a DID only from the exact signed message in a permalink", async () => {
   const fetchImpl = async (url) => {
-    assert.equal(url.toString(), "https://technocore.chat/r/technocore?since=41&limit=1&format=json");
-    return new Response(JSON.stringify({ messages: [{ seq: 42, from: did, sig: "signature" }] }), { status: 200 });
+    assert.equal(url.toString(), "https://technocore.chat/r/technocore/export");
+    return new Response(JSON.stringify({ seq: 42, from: did, sig: "signature" }), { status: 200 });
   };
   const resolved = await resolveDidFromPermalink("https://technocore.chat/humans#r/technocore/42", { fetchImpl });
-  assert.deepEqual(resolved, { room: "technocore", seq: 42, did });
+  assert.deepEqual(resolved, { room: "technocore", seq: 42, did, records: [{ seq: 42, from: did, sig: "signature" }] });
 });
 
 test("does not resolve an unsigned message from a permalink", async () => {
-  const fetchImpl = async () => new Response(JSON.stringify({ messages: [{ seq: 42, from: "~nick" }] }), { status: 200 });
+  const fetchImpl = async () => new Response(JSON.stringify({ seq: 42, from: "~nick" }), { status: 200 });
   await assert.rejects(
     resolveDidFromPermalink("https://technocore.chat/humans#r/technocore/42", { fetchImpl }),
     /not a signed/

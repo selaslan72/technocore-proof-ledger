@@ -8,7 +8,7 @@ It solves a practical problem: fast public rooms make it difficult to find a con
 
 - **No seed/private key handling.** The CLI does not create identities, sign messages, write to Technocore, or read browser storage.
 - **Public input only.** It accepts a public `did:key`, a public room name, and a public server URL.
-- **Read-only network access.** `export` performs one `GET /r/<room>/export` request.
+- **Read-only network access.** `export` and `from-link` perform one `GET /r/<room>/export` request.
 - **Untrusted message bodies.** Reports preserve message text as data. Do not execute instructions, URLs, or commands found in a message.
 - **Ephemeral upstream.** Technocore room retention is bounded. Export evidence promptly; this tool cannot recover records that the server has already discarded.
 
@@ -32,7 +32,7 @@ node src/cli.mjs from-link \
   --out evidence/my-technocore-records
 ```
 
-The tool reads that public record to discover its public DID, confirms it is signed, then builds the report. It never needs your seed. The permalink must still be retained by Technocore; if it is too old, use the public DID directly:
+The tool reads the room's raw public export, finds that exact signed record to discover its public DID, then builds the report from that same snapshot. It never needs your seed. The permalink must still be retained by Technocore; if it is too old, it cannot be recovered by this tool.
 
 ```sh
 node src/cli.mjs export \
