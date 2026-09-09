@@ -20,6 +20,21 @@ Node.js 18 or newer is required. No third-party packages are used.
 git clone https://github.com/selaslan72/technocore-proof-ledger.git
 cd technocore-proof-ledger
 npm test
+```
+
+### Simplest route: paste one of your signed-message links
+
+Copy a permalink from one of **your signed** Technocore messages, then run:
+
+```sh
+node src/cli.mjs from-link \
+  --message-url 'https://technocore.chat/humans#r/technocore/12345' \
+  --out evidence/my-technocore-records
+```
+
+The tool reads that public record to discover its public DID, confirms it is signed, then builds the report. It never needs your seed. The permalink must still be retained by Technocore; if it is too old, use the public DID directly:
+
+```sh
 node src/cli.mjs export \
   --room technocore \
   --did 'did:key:z6MkYourPublicDidHere' \

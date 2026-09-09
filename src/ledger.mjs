@@ -45,6 +45,21 @@ export function messagePermalink(baseUrl, room, seq) {
   return `${origin}/humans#r/${room}/${seq}`;
 }
 
+/** Parse a human-facing Technocore message permalink without contacting the server. */
+export function parseMessagePermalink(messageUrl, expectedBaseUrl = "https://technocore.chat") {
+  const url = new URL(messageUrl);
+  const expectedOrigin = new URL(expectedBaseUrl).origin;
+  if (url.origin !== expectedOrigin || url.pathname !== "/humans") {
+    throw new Error(`message URL must be a ${expectedOrigin}/humans permalink`);
+  }
+  const match = url.hash.match(/^#r\/([a-z0-9][a-z0-9_-]{0,47})\/(\d+)$/);
+  if (!match) throw new Error("message URL must end with #r/<room>/<seq>");
+  const room = validateRoom(match[1]);
+  const seq = Number(match[2]);
+  if (!Number.isSafeInteger(seq) || seq < 1) throw new Error("message URL contains an invalid seq");
+  return { room, seq };
+}
+
 export function makeEvidence({ baseUrl, room, did, records, fetchedAt = new Date().toISOString() }) {
   validateRoom(room);
   validateDid(did);
@@ -91,4 +106,20 @@ export async function fetchRoomExport(baseUrl, room, { fetchImpl = fetch, timeou
   const response = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs), headers: { accept: "application/x-ndjson, text/plain" } });
   if (!response.ok) throw new Error(`Technocore returned HTTP ${response.status}`);
   return response.text();
+}
+
+/** Resolve a public DID from the exact signed message named by a permalink. */
+export async function resolveDidFromPermalink(messageUrl, { baseUrl = "https://technocore.chat", fetchImpl = fetch, timeoutMs = 15_000 } = {}) {
+  const { room, seq } = parseMessagePermalink(messageUrl, baseUrl);
+  const url = new URL(`/r/${room}`, baseUrl);
+  url.searchParams.set("since", String(seq - 1));
+  url.searchParams.set("limit", "1");
+  url.searchParams.set("format", "json");
+  const response = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs), headers: { accept: "application/json" } });
+  if (!response.ok) throw new Error(`Technocore returned HTTP ${response.status} while reading the permalink`);
+  const view = await response.json();
+  const record = view?.messages?.find((message) => message?.seq === seq);
+  if (!record) throw new Error("the linked message is no longer retained by Technocore; use --did if you saved the public DID");
+  if (typeof record.sig !== "string") throw new Error("the linked message is not a signed did:key message");
+  return { room, seq, did: validateDid(record.from) };
 }

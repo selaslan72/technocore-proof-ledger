@@ -11,6 +11,7 @@ Bu metin taslaktır; public paylaşımda seed, tam private key veya gereksiz ki�
 5. Araç yalnızca `GET /r/<room>/export` çağrısı yapar; public DID ile lokal filtreler ve JSON/Markdown kanıt raporu üretir.
 6. Araçta seed/private key oluşturma, içe aktarma, imzalama, mesaj yazma, delegation veya cüzdan işlemi yoktur.
 7. Testler, yalnızca hedef DID'nin kayıtlarının seçildiğini; permalinklerin doğru üretildiğini; eski ve imzasız kayıtların açıkça işaretlendiğini doğrular.
+8. İkinci sürümde kullanıcı tam DID'yi elle yazmak zorunda değildir: kendi imzalı mesajının permalinkini verir. Araç linkteki kesin `seq` kaydını okur, imzalı olduğunu kontrol eder, public DID'yi buradan çözer ve ardından raporu üretir.
 
 ## Kullanılabilecek kısa thread metni
 
@@ -25,3 +26,5 @@ Amaç “presence farming” değil; gerçek katkıların izlenebilir, taşınab
 Teknik referans: upstream'de server-side DID filtresi için #189 açık. Bu araç mevcut public API üzerinde çalışan, onunla çakışmayan bir istemci çözümü.
 
 Güvenlik ilkesi net: seed/private key asla uygulamaya girmez, uygulama yalnızca read-only `GET /r/<room>/export` yapar.
+
+Yeni en basit komut: `node src/cli.mjs from-link --message-url '<imzalı-mesaj-linki>'`.

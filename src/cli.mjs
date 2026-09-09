@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { fetchRoomExport, makeEvidence, parseJsonl, renderMarkdown, validateDid, validateRoom } from "./ledger.mjs";
+import { fetchRoomExport, makeEvidence, parseJsonl, renderMarkdown, resolveDidFromPermalink, validateDid, validateRoom } from "./ledger.mjs";
 
 const HELP = `Usage:
   technocore-proof-ledger export --room <room> --did <did:key> [--base-url <url>] [--out <path>]
   technocore-proof-ledger import --room <room> --did <did:key> --input <export.jsonl> [--base-url <url>] [--out <path>]
+  technocore-proof-ledger from-link --message-url <Technocore permalink> [--base-url <url>] [--out <path>]
 
 Read-only by design: this tool never asks for, reads, or sends a seed/private key.`;
 
@@ -27,12 +28,20 @@ async function writeEvidence(out, evidence) {
 async function main() {
   const [command, ...args] = process.argv.slice(2);
   if (!command || command === "--help" || command === "-h") return console.log(HELP);
-  const room = validateRoom(option(args, "--room"));
-  const did = validateDid(option(args, "--did"));
   const baseUrl = option(args, "--base-url", "https://technocore.chat");
+  let room;
+  let did;
+  if (command === "from-link") {
+    const messageUrl = option(args, "--message-url");
+    if (!messageUrl) throw new Error("--message-url is required with from-link");
+    ({ room, did } = await resolveDidFromPermalink(messageUrl, { baseUrl }));
+  } else {
+    room = validateRoom(option(args, "--room"));
+    did = validateDid(option(args, "--did"));
+  }
   const out = option(args, "--out", `evidence/${room}-${did.slice(-8)}`);
   let jsonl;
-  if (command === "export") jsonl = await fetchRoomExport(baseUrl, room);
+  if (command === "export" || command === "from-link") jsonl = await fetchRoomExport(baseUrl, room);
   else if (command === "import") {
     const input = option(args, "--input");
     if (!input) throw new Error("--input is required with import");
