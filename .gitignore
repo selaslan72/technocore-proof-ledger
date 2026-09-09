@@ -1,6 +1,7 @@
-evidence/
-!evidence/
-evidence/*
-!evidence/technocore-proof.json
-!evidence/technocore-proof.md
+examples/
+!examples/
+examples/*
+!examples/README.md
+!examples/technocore-proof.json
+!examples/technocore-proof.md
 node_modules/

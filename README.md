@@ -46,6 +46,10 @@ The command writes:
 - `evidence/my-technocore-records.json` — structured evidence
 - `evidence/my-technocore-records.md` — readable report with message permalinks
 
+## Example output
+
+[`examples/`](examples/README.md) contains a deliberately published, public demo report. It illustrates the output shape only; it is not an airdrop claim, reward-eligibility proof, or an identity-ownership statement.
+
 To create a report from a previously downloaded export without any network access:
 
 ```sh
