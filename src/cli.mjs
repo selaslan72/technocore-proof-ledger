@@ -64,7 +64,7 @@ async function main() {
     const input = option(args, "--input");
     if (!input) throw new Error("--input is required with import");
     jsonl = await readFile(input, "utf8");
-  } else throw new Error(`unknown command: ${command}`);
+  } else if (command !== "from-link") throw new Error(`unknown command: ${command}`);
   if (!records) records = parseJsonl(jsonl);
   await writeEvidence(out, makeEvidence({ baseUrl, room, did, records }));
 }
