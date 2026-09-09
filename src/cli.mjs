@@ -15,6 +15,12 @@ function option(args, name, fallback) {
   return index === -1 ? fallback : args[index + 1];
 }
 
+// Chat clients sometimes replace a hyphen with a typographic dash while a
+// command is being copied. Accept those variants for command and option names.
+function normalizeCliArg(value) {
+  return value.replace(/[\u2010-\u2015\u2212]/g, "-");
+}
+
 async function writeEvidence(out, evidence) {
   const jsonPath = resolve(out.endsWith(".json") ? out : `${out}.json`);
   const markdownPath = jsonPath.replace(/\.json$/, ".md");
@@ -26,7 +32,7 @@ async function writeEvidence(out, evidence) {
 }
 
 async function main() {
-  const [command, ...args] = process.argv.slice(2);
+  const [command, ...args] = process.argv.slice(2).map(normalizeCliArg);
   if (!command || command === "--help" || command === "-h") return console.log(HELP);
   const baseUrl = option(args, "--base-url", "https://technocore.chat");
   let room;
