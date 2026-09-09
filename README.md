@@ -27,12 +27,12 @@ npm test
 Copy a permalink from one of **your signed** Technocore messages, then run:
 
 ```sh
-node src/cli.mjs from-link \
-  --message-url 'https://technocore.chat/humans#r/technocore/12345' \
-  --out evidence/my-technocore-records
+node src/cli.mjs --message-url 'https://technocore.chat/humans#r/technocore/12345' --out evidence/my-technocore-records
 ```
 
 The tool reads the room's raw public export, finds that exact signed record to discover its public DID, then builds the report from that same snapshot. It never needs your seed. The permalink must still be retained by Technocore; if it is too old, it cannot be recovered by this tool.
+
+`from-link` may also be written explicitly before `--message-url`, but it is optional.
 
 ```sh
 node src/cli.mjs export \

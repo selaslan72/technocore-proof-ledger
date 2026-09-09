@@ -39,6 +39,11 @@ async function writeEvidence(out, evidence) {
 async function main() {
   let [command, ...args] = process.argv.slice(2).map(normalizeCliArg);
   if (commandToken(command) === "fromlink") command = "from-link";
+  // The common one-link workflow may omit the command word entirely.
+  if (commandToken(command) === "messageurl") {
+    args = [command, ...args];
+    command = "from-link";
+  }
   if (!command || command === "--help" || command === "-h") return console.log(HELP);
   const baseUrl = option(args, "--base-url", "https://technocore.chat");
   let room;
