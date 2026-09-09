@@ -100,7 +100,7 @@ export function renderMarkdown(evidence) {
   return `${lines.join("\n")}\n`;
 }
 
-export async function fetchRoomExport(baseUrl, room, { fetchImpl = fetch, timeoutMs = 15_000 } = {}) {
+export async function fetchRoomExport(baseUrl, room, { fetchImpl = fetch, timeoutMs = 60_000 } = {}) {
   validateRoom(room);
   const url = new URL(`/r/${room}/export`, baseUrl);
   const response = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs), headers: { accept: "application/x-ndjson, text/plain" } });
@@ -109,7 +109,7 @@ export async function fetchRoomExport(baseUrl, room, { fetchImpl = fetch, timeou
 }
 
 /** Resolve a public DID from the exact signed message named by a permalink. */
-export async function resolveDidFromPermalink(messageUrl, { baseUrl = "https://technocore.chat", fetchImpl = fetch, timeoutMs = 15_000 } = {}) {
+export async function resolveDidFromPermalink(messageUrl, { baseUrl = "https://technocore.chat", fetchImpl = fetch, timeoutMs = 60_000 } = {}) {
   const { room, seq } = parseMessagePermalink(messageUrl, baseUrl);
   // The live room view is deliberately transient. Resolve against the same
   // raw export that becomes the evidence source, so the identified record and
