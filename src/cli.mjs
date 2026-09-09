@@ -10,8 +10,13 @@ const HELP = `Usage:
 
 Read-only by design: this tool never asks for, reads, or sends a seed/private key.`;
 
+function commandToken(value) {
+  return value.toLowerCase().replace(/[^a-z]/g, "");
+}
+
 function option(args, name, fallback) {
-  const index = args.indexOf(name);
+  const wanted = commandToken(name);
+  const index = args.findIndex((arg) => commandToken(arg) === wanted);
   return index === -1 ? fallback : args[index + 1];
 }
 
@@ -32,7 +37,8 @@ async function writeEvidence(out, evidence) {
 }
 
 async function main() {
-  const [command, ...args] = process.argv.slice(2).map(normalizeCliArg);
+  let [command, ...args] = process.argv.slice(2).map(normalizeCliArg);
+  if (commandToken(command) === "fromlink") command = "from-link";
   if (!command || command === "--help" || command === "-h") return console.log(HELP);
   const baseUrl = option(args, "--base-url", "https://technocore.chat");
   let room;
