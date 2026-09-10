@@ -32,6 +32,8 @@
       .status.error { color: #a4261d; }
       .result { display: none; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
       .result.visible { display: block; }
+      .preview { margin-top: 18px; }
+      .preview pre { max-height: 420px; margin-bottom: 0; white-space: pre-wrap; word-break: break-word; }
       section { padding: 62px 0; border-top: 1px solid var(--line); }
       .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
       .card { padding: 25px; border: 1px solid var(--line); border-radius: 10px; background: white; }
@@ -70,6 +72,10 @@
               <button class="button primary" type="button" id="download-json">Download JSON</button>
               <button class="button" type="button" id="download-markdown">Download Markdown</button>
             </div>
+            <details class="preview">
+              <summary>Preview message content (read-only)</summary>
+              <pre id="message-preview"></pre>
+            </details>
           </div>
         </form>
       </section>
@@ -114,7 +120,7 @@ node src/cli.mjs from-link \
           <div class="grid">
             <article class="card"><h3>No seed or private key</h3><p>The tool never asks for, reads, stores, imports, or transmits a seed or private key.</p></article>
             <article class="card"><h3>Public data only</h3><p>It works from a public message link and a public room export. It does not write messages or connect a wallet.</p></article>
-            <article class="card"><h3>Local verification</h3><p>Signature verification happens locally in the CLI. This website does not receive or process a report or a message link.</p></article>
+            <article class="card"><h3>Local verification</h3><p>Signature verification happens locally in your browser. No server receives your report or message link.</p></article>
           </div>
         </div>
       </section>

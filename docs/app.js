@@ -12,6 +12,7 @@ const result = document.querySelector("#result");
 const summary = document.querySelector("#result-summary");
 const downloadJson = document.querySelector("#download-json");
 const downloadMarkdown = document.querySelector("#download-markdown");
+const preview = document.querySelector("#message-preview");
 let generated;
 
 function setStatus(message, isError = false) {
@@ -167,6 +168,22 @@ function download(filename, type, contents) {
   URL.revokeObjectURL(url);
 }
 
+function renderPreview(records) {
+  const limit = 100;
+  const characterLimit = 200_000;
+  let text = "";
+  let shown = 0;
+  for (const record of records) {
+    const next = `#${record.seq} · ${record.ts}\n${String(record.text ?? "")}\n\n`;
+    if (shown === limit || text.length + next.length > characterLimit) break;
+    text += next;
+    shown += 1;
+  }
+  if (shown < records.length) text += `Preview limited to ${shown} records. Download a report for all ${records.length} records.\n`;
+  // textContent deliberately keeps public message bodies as text, never HTML.
+  preview.textContent = text;
+}
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   result.classList.remove("visible");
@@ -189,6 +206,7 @@ form.addEventListener("submit", async (event) => {
       source: { baseUrl: BASE_URL, room, did, endpoint: `/r/${room}/export`, snapshotSha256: await sha256(jsonl), snapshotBytes: encoder.encode(jsonl).byteLength },
       recordCount: selected.length, signatureValidCount: selected.filter((record) => record.verification === "signature-valid").length, records: selected
     };
+    renderPreview(selected);
     summary.textContent = `Found ${generated.recordCount} matching records; ${generated.signatureValidCount} are cryptographically verified.`;
     result.classList.add("visible");
     setStatus("Done. The report exists only in this browser until you download it.");
