@@ -57,7 +57,7 @@ Each CLI-produced report also contains the SHA-256 and byte length of the exact 
 
 ## Website
 
-The static project site is in [`docs/`](docs/index.html). GitHub Pages publishes it after Pages is enabled for this repository with **GitHub Actions** as its source. The site is explanatory only: it does not accept a message link, connect a wallet, or send data to a server.
+The static project site is in [`docs/`](docs/index.html). It can generate JSON and Markdown evidence from a pasted **public** signed-message permalink. The browser reads the public Technocore export and verifies signatures locally; it does not connect a wallet, send a report to a server, or handle a seed/private key.
 
 To create a report from a previously downloaded export without any network access:
 
