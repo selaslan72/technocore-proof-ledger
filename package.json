@@ -1,6 +1,6 @@
 {
   "name": "technocore-proof-ledger",
-  "version": "0.3.4",
+  "version": "0.4.0",
   "description": "A read-only, seed-free evidence exporter for signed Technocore messages.",
   "type": "module",
   "bin": {

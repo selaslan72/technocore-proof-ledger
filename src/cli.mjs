@@ -49,16 +49,16 @@ async function main() {
   let room;
   let did;
   let records;
+  let jsonl;
   if (command === "from-link") {
     const messageUrl = option(args, "--message-url");
     if (!messageUrl) throw new Error("--message-url is required with from-link");
-    ({ room, did, records } = await resolveDidFromPermalink(messageUrl, { baseUrl }));
+    ({ room, did, records, jsonl } = await resolveDidFromPermalink(messageUrl, { baseUrl }));
   } else {
     room = validateRoom(option(args, "--room"));
     did = validateDid(option(args, "--did"));
   }
   const out = option(args, "--out", `evidence/${room}-${did.slice(-8)}`);
-  let jsonl;
   if (command === "export") jsonl = await fetchRoomExport(baseUrl, room);
   else if (command === "import") {
     const input = option(args, "--input");
@@ -66,7 +66,7 @@ async function main() {
     jsonl = await readFile(input, "utf8");
   } else if (command !== "from-link") throw new Error(`unknown command: ${command}`);
   if (!records) records = parseJsonl(jsonl);
-  await writeEvidence(out, makeEvidence({ baseUrl, room, did, records }));
+  await writeEvidence(out, makeEvidence({ baseUrl, room, did, records, sourceJsonl: jsonl }));
 }
 
 main().catch((error) => {

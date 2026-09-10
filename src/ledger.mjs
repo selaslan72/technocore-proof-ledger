@@ -1,4 +1,12 @@
+import { createHash, verify as verifySignature } from "node:crypto";
+
 const ROOM_PATTERN = /^[a-z0-9][a-z0-9_-]{0,47}$/;
+const BASE58_PATTERN = "[1-9A-HJ-NP-Za-km-z]";
+const DID_KEY_PATTERN = new RegExp(`^did:key:z6Mk${BASE58_PATTERN}{44}$`);
+const SIGNATURE_PATTERN = /^[A-Za-z0-9_-]{85}[AQgw]$/;
+const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+const ED25519_MULTICODEC = Buffer.from([0xed, 0x01]);
+const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
 
 export function validateRoom(room) {
   if (!ROOM_PATTERN.test(room)) {
@@ -8,7 +16,7 @@ export function validateRoom(room) {
 }
 
 export function validateDid(did) {
-  if (typeof did !== "string" || !did.startsWith("did:key:z")) {
+  if (typeof did !== "string" || !DID_KEY_PATTERN.test(did)) {
     throw new Error("did must be a public did:key identifier");
   }
   return did;
@@ -20,20 +28,76 @@ export function parseJsonl(jsonl) {
     .filter(Boolean)
     .map((line, index) => {
       try {
-        return JSON.parse(line);
+        const record = JSON.parse(line);
+        // A valid Technocore nonce can be 19 digits, which exceeds JavaScript's
+        // exact Number range. Preserve its raw decimal spelling for verification.
+        if (record && typeof record === "object" && "nonce" in record) record.nonce = nonceFromJsonLine(line);
+        return record;
       } catch {
         throw new Error(`invalid JSONL record at line ${index + 1}`);
       }
     });
 }
 
-export function selectSignedRecords(records, did) {
+function nonceFromJsonLine(line) {
+  const match = line.match(/(?:^|,)\s*"nonce"\s*:\s*("(?:[^"\\]|\\.)*"|[0-9]+)\s*(?=,|})/);
+  if (!match) throw new Error("record nonce must be a JSON string or decimal integer");
+  const raw = match[1];
+  const nonce = raw.startsWith("\"") ? JSON.parse(raw) : raw;
+  if (typeof nonce !== "string" || !/^[0-9]{1,19}$/.test(nonce)) {
+    throw new Error("record nonce must contain 1-19 decimal digits");
+  }
+  return nonce;
+}
+
+function base58Decode(value) {
+  let number = 0n;
+  for (const character of value) {
+    const digit = BASE58_ALPHABET.indexOf(character);
+    if (digit === -1) throw new Error("did contains non-base58 characters");
+    number = number * 58n + BigInt(digit);
+  }
+  const bytes = [];
+  while (number > 0n) {
+    bytes.push(Number(number & 0xffn));
+    number >>= 8n;
+  }
+  bytes.reverse();
+  const leadingZeroes = value.length - value.replace(/^1+/, "").length;
+  return Buffer.concat([Buffer.alloc(leadingZeroes), Buffer.from(bytes)]);
+}
+
+export function publicKeyFromDid(did) {
+  validateDid(did);
+  const decoded = base58Decode(did.slice("did:key:z".length));
+  if (decoded.length !== 34 || !decoded.subarray(0, 2).equals(ED25519_MULTICODEC)) {
+    throw new Error("did must contain an Ed25519 public key");
+  }
+  return decoded.subarray(2);
+}
+
+export function verifyRecordSignature(room, record) {
+  if (typeof record?.sig !== "string") return "signature-unavailable";
+  try {
+    if (!SIGNATURE_PATTERN.test(record.sig)) return "signature-invalid";
+    if (typeof record.from !== "string" || typeof record.text !== "string" || typeof record.nonce !== "string") return "signature-invalid";
+    const publicKey = publicKeyFromDid(record.from);
+    const key = Buffer.concat([ED25519_SPKI_PREFIX, publicKey]);
+    const message = Buffer.from(`${room}|${record.nonce}|${record.text}`, "utf8");
+    const signature = Buffer.from(record.sig, "base64url");
+    return verifySignature(null, message, { key, format: "der", type: "spki" }, signature) ? "signature-valid" : "signature-invalid";
+  } catch {
+    return "signature-invalid";
+  }
+}
+
+export function selectSignedRecords(records, did, room) {
   validateDid(did);
   return records
     .filter((record) => record?.from === did)
     .map((record) => ({
       ...record,
-      verification: typeof record.sig === "string" ? "signature-present" : "signature-unavailable"
+      verification: verifyRecordSignature(room, record)
     }));
 }
 
@@ -60,10 +124,14 @@ export function parseMessagePermalink(messageUrl, expectedBaseUrl = "https://tec
   return { room, seq };
 }
 
-export function makeEvidence({ baseUrl, room, did, records, fetchedAt = new Date().toISOString() }) {
+export function sha256(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+export function makeEvidence({ baseUrl, room, did, records, sourceJsonl, fetchedAt = new Date().toISOString() }) {
   validateRoom(room);
   validateDid(did);
-  const signedRecords = selectSignedRecords(records, did).map((record) => ({
+  const signedRecords = selectSignedRecords(records, did, room).map((record) => ({
     seq: record.seq,
     ts: record.ts,
     nonce: record.nonce,
@@ -75,10 +143,25 @@ export function makeEvidence({ baseUrl, room, did, records, fetchedAt = new Date
   return {
     schemaVersion: 1,
     generatedAt: fetchedAt,
-    source: { baseUrl: new URL(baseUrl).origin, room, did, endpoint: `/r/${room}/export` },
+    source: {
+      baseUrl: new URL(baseUrl).origin,
+      room,
+      did,
+      endpoint: `/r/${room}/export`,
+      ...(typeof sourceJsonl === "string" ? {
+        snapshotSha256: sha256(sourceJsonl),
+        snapshotBytes: Buffer.byteLength(sourceJsonl)
+      } : {})
+    },
     recordCount: signedRecords.length,
+    signatureValidCount: signedRecords.filter((record) => record.verification === "signature-valid").length,
     records: signedRecords
   };
+}
+
+function fenceFor(text) {
+  const longestBacktickRun = Math.max(0, ...[...text.matchAll(/`+/g)].map((match) => match[0].length));
+  return "`".repeat(Math.max(3, longestBacktickRun + 1));
 }
 
 export function renderMarkdown(evidence) {
@@ -90,22 +173,31 @@ export function renderMarkdown(evidence) {
     `- Room: \`${evidence.source.room}\``,
     `- Source: ${evidence.source.baseUrl}${evidence.source.endpoint}`,
     `- Matching records: ${evidence.recordCount}`,
+    `- Cryptographically verified records: ${evidence.signatureValidCount}`,
+    ...(evidence.source.snapshotSha256 ? [`- Source snapshot SHA-256: \`${evidence.source.snapshotSha256}\``, `- Source snapshot bytes: ${evidence.source.snapshotBytes}`] : []),
     "",
-    "This report is read-only. It never creates, imports, transmits, or stores a private key or seed.",
+    "This report is read-only. It never creates, imports, transmits, or stores a private key or seed. `signature-valid` means this CLI verified the exported Ed25519 signature over the documented `room|nonce|text` bytes. It does not establish airdrop eligibility or reward entitlement.",
     ""
   ];
   for (const record of evidence.records) {
-    lines.push(`## #${record.seq}`, "", `- Time: ${record.ts}`, `- Nonce: ${record.nonce}`, `- Signature: ${record.verification}`, `- Permalink: ${record.permalink}`, "", record.text, "");
+    const fence = fenceFor(String(record.text ?? ""));
+    lines.push(`## #${record.seq}`, "", `- Time: ${record.ts}`, `- Nonce: ${record.nonce}`, `- Signature: ${record.verification}`, `- Permalink: ${record.permalink}`, "", fence, String(record.text ?? ""), fence, "");
   }
   return `${lines.join("\n")}\n`;
 }
 
-export async function fetchRoomExport(baseUrl, room, { fetchImpl = fetch, timeoutMs = 60_000 } = {}) {
+export async function fetchRoomExport(baseUrl, room, { fetchImpl = fetch, timeoutMs = 60_000, maxBytes = 25 * 1024 * 1024 } = {}) {
   validateRoom(room);
   const url = new URL(`/r/${room}/export`, baseUrl);
   const response = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs), headers: { accept: "application/x-ndjson, text/plain" } });
   if (!response.ok) throw new Error(`Technocore returned HTTP ${response.status}`);
-  return response.text();
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    throw new Error(`Technocore export exceeds the ${maxBytes}-byte safety limit`);
+  }
+  const jsonl = await response.text();
+  if (Buffer.byteLength(jsonl) > maxBytes) throw new Error(`Technocore export exceeds the ${maxBytes}-byte safety limit`);
+  return jsonl;
 }
 
 /** Resolve a public DID from the exact signed message named by a permalink. */
@@ -114,9 +206,10 @@ export async function resolveDidFromPermalink(messageUrl, { baseUrl = "https://t
   // The live room view is deliberately transient. Resolve against the same
   // raw export that becomes the evidence source, so the identified record and
   // the report are drawn from one retained public snapshot.
-  const records = parseJsonl(await fetchRoomExport(baseUrl, room, { fetchImpl, timeoutMs }));
+  const jsonl = await fetchRoomExport(baseUrl, room, { fetchImpl, timeoutMs });
+  const records = parseJsonl(jsonl);
   const record = records.find((message) => message?.seq === seq);
   if (!record) throw new Error("the linked message is no longer retained by Technocore; use --did if you saved the public DID");
-  if (typeof record.sig !== "string") throw new Error("the linked message is not a signed did:key message");
-  return { room, seq, did: validateDid(record.from), records };
+  if (verifyRecordSignature(room, record) !== "signature-valid") throw new Error("the linked message does not have a valid signed did:key record");
+  return { room, seq, did: validateDid(record.from), records, jsonl };
 }
