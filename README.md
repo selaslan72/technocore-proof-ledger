@@ -55,6 +55,10 @@ The command writes:
 
 Each CLI-produced report also contains the SHA-256 and byte length of the exact raw export snapshot it read. This helps compare reports against a separately retained public export; it is not a signature on the report itself.
 
+## Website
+
+The static project site is in [`docs/`](docs/index.html). GitHub Pages publishes it after Pages is enabled for this repository with **GitHub Actions** as its source. The site is explanatory only: it does not accept a message link, connect a wallet, or send data to a server.
+
 To create a report from a previously downloaded export without any network access:
 
 ```sh

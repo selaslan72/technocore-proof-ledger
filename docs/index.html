@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="A read-only, seed-free evidence exporter for public Technocore signed messages.">
+    <title>Technocore Proof Ledger</title>
+    <style>
+      :root { --ink: #13233c; --paper: #f7f5ef; --blue: #1769e0; --mint: #dff7e6; --line: #cad4df; }
+      * { box-sizing: border-box; }
+      body { margin: 0; color: var(--ink); background: var(--paper); font: 17px/1.55 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      a { color: #075bc5; text-underline-offset: 3px; }
+      .wrap { width: min(1080px, calc(100% - 40px)); margin: auto; }
+      header { padding: 20px 0; border-bottom: 1px solid var(--line); }
+      nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+      .mark { font-weight: 800; text-decoration: none; color: var(--ink); letter-spacing: -.03em; }
+      .tag { padding: 4px 10px; border: 1px solid #7a9fc9; border-radius: 999px; font-size: .8rem; }
+      .hero { padding: 86px 0 64px; max-width: 780px; }
+      h1 { font-size: clamp(2.7rem, 8vw, 5.8rem); letter-spacing: -.075em; line-height: .94; margin: 0 0 26px; }
+      h2 { font-size: clamp(1.8rem, 4vw, 2.7rem); letter-spacing: -.045em; line-height: 1; margin: 0 0 18px; }
+      h3 { margin-top: 0; font-size: 1.1rem; }
+      .lead { max-width: 680px; font-size: 1.24rem; }
+      .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+      .button { display: inline-block; padding: 12px 17px; border: 1px solid var(--ink); border-radius: 7px; font-weight: 700; text-decoration: none; }
+      .button.primary { color: white; background: var(--blue); border-color: var(--blue); }
+      section { padding: 62px 0; border-top: 1px solid var(--line); }
+      .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+      .card { padding: 25px; border: 1px solid var(--line); border-radius: 10px; background: white; }
+      .num { display: block; margin-bottom: 18px; color: var(--blue); font-weight: 800; }
+      .notice { max-width: 800px; padding: 22px 25px; border-left: 5px solid #14874b; background: var(--mint); }
+      pre { overflow: auto; padding: 20px; border-radius: 9px; color: #e9f2ff; background: #10233d; font-size: .88rem; }
+      footer { padding: 35px 0 55px; color: #4a5d75; font-size: .9rem; }
+      @media (max-width: 720px) { .hero { padding: 60px 0 48px; } .grid { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <nav class="wrap">
+        <a class="mark" href="./">Technocore Proof Ledger</a>
+        <span class="tag">Read-only · seed-free</span>
+      </nav>
+    </header>
+    <main>
+      <section class="hero wrap">
+        <h1>Public proof.<br>Private keys stay private.</h1>
+        <p class="lead">A small open-source CLI for collecting public Technocore signed-message evidence. It reads public exports, verifies signatures locally, and writes a report you can keep.</p>
+        <div class="actions">
+          <a class="button primary" href="https://github.com/selaslan72/technocore-proof-ledger">View on GitHub</a>
+          <a class="button" href="#use">See how it works</a>
+        </div>
+      </section>
+
+      <section>
+        <div class="wrap">
+          <h2>Three simple steps</h2>
+          <div class="grid">
+            <article class="card"><span class="num">01</span><h3>Copy a public link</h3><p>Choose a permalink to one of your signed Technocore messages. The link and message are already public.</p></article>
+            <article class="card"><span class="num">02</span><h3>Run locally</h3><p>The CLI downloads the public room export, identifies the public DID from that exact message, and verifies signatures on your computer.</p></article>
+            <article class="card"><span class="num">03</span><h3>Keep the report</h3><p>You receive JSON for machines and Markdown for people, including stable message links and a source-snapshot SHA-256.</p></article>
+          </div>
+        </div>
+      </section>
+
+      <section id="use">
+        <div class="wrap">
+          <h2>Use it from your terminal</h2>
+          <pre><code>git clone https://github.com/selaslan72/technocore-proof-ledger.git
+cd technocore-proof-ledger
+
+node src/cli.mjs from-link \
+  --message-url 'https://technocore.chat/humans#r/lobby/12345' \
+  --out evidence/my-technocore-records</code></pre>
+          <p>The command produces <code>.json</code> and <code>.md</code> reports. Replace the example link with your own public signed-message permalink.</p>
+        </div>
+      </section>
+
+      <section>
+        <div class="wrap">
+          <h2>What it does — and does not — prove</h2>
+          <div class="notice">
+            <strong>It does:</strong> verify that a public Technocore record’s signature matches its public <code>did:key</code>, room, nonce, and message text.<br><br>
+            <strong>It does not:</strong> establish airdrop eligibility, reward entitlement, FLOP Labs affiliation, or a real-world identity claim.
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="wrap">
+          <h2>Security is the feature</h2>
+          <div class="grid">
+            <article class="card"><h3>No seed or private key</h3><p>The tool never asks for, reads, stores, imports, or transmits a seed or private key.</p></article>
+            <article class="card"><h3>Public data only</h3><p>It works from a public message link and a public room export. It does not write messages or connect a wallet.</p></article>
+            <article class="card"><h3>Local verification</h3><p>Signature verification happens locally in the CLI. This website does not receive or process a report or a message link.</p></article>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer class="wrap">An independent, community-built tool. Not affiliated with FLOP Labs.</footer>
+  </body>
+</html>
