@@ -47,6 +47,26 @@ async function readBoundedText(response) {
   return new Blob(chunks).text();
 }
 
+async function fetchExport(room) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60_000);
+  try {
+    const response = await fetch(`${BASE_URL}/r/${room}/export`, {
+      signal: controller.signal,
+      headers: { accept: "application/x-ndjson, text/plain" }
+    });
+    if (!response.ok) throw new Error(`Technocore returned HTTP ${response.status}.`);
+    return await readBoundedText(response);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("The public export did not finish within 60 seconds. Try again shortly.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function nonceFromLine(line) {
   const match = line.match(/(?:^|,)\s*"nonce"\s*:\s*("(?:[^"\\]|\\.)*"|[0-9]+)\s*(?=,|})/);
   if (!match) throw new Error("A record has no usable nonce.");
@@ -154,9 +174,7 @@ form.addEventListener("submit", async (event) => {
     if (!crypto.subtle) throw new Error("Your browser does not support local cryptographic verification.");
     const { room, seq } = parsePermalink(input.value.trim());
     setStatus("Reading the public export and verifying signatures locally…");
-    const response = await fetch(`${BASE_URL}/r/${room}/export`, { headers: { accept: "application/x-ndjson, text/plain" } });
-    if (!response.ok) throw new Error(`Technocore returned HTTP ${response.status}.`);
-    const jsonl = await readBoundedText(response);
+    const jsonl = await fetchExport(room);
     const records = parseJsonl(jsonl);
     const linked = records.find((record) => String(record?.seq) === seq);
     if (!linked) throw new Error("The linked message is no longer retained by Technocore.");
