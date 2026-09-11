@@ -111,7 +111,7 @@ node src/cli.mjs from-link \
           <pre><code>node src/cli.mjs watch \
   --room lobby \
   --archive archive/lobby.jsonl</code></pre>
-          <p>It reads the public room with a sequence checkpoint, appends only unseen records locally, and resumes after a restart. No seed, private key, wallet, account, or posting endpoint is involved.</p>
+          <p>Its first run captures the full currently retained export; it then follows the public room with a sequence checkpoint and a 200-record reader window. If that window detects a gap, it re-reads the retained export to recover it where possible. It appends only unseen records locally and resumes after a restart. No seed, private key, wallet, account, or posting endpoint is involved.</p>
         </div>
       </section>
 

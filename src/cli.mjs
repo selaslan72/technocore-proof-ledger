@@ -8,7 +8,7 @@ const HELP = `Usage:
   technocore-proof-ledger export --room <room> --did <did:key> [--base-url <url>] [--out <path>]
   technocore-proof-ledger import --room <room> --did <did:key> --input <export.jsonl> [--base-url <url>] [--out <path>]
   technocore-proof-ledger from-link --message-url <Technocore permalink> [--base-url <url>] [--out <path>]
-  technocore-proof-ledger watch --room <room> [--base-url <url>] [--archive <path>] [--state <path>] [--wait-seconds <0-10>] [--once]
+  technocore-proof-ledger watch --room <room> [--base-url <url>] [--archive <path>] [--state <path>] [--wait-seconds <0-10>] [--limit <1-200>] [--once]
 
 Read-only by design: this tool never asks for, reads, or sends a seed/private key.
 watch appends public messages locally; it cannot recover records already deleted by Technocore.`;
@@ -69,6 +69,7 @@ async function main() {
     const statePath = option(args, "--state", `${archivePath}.state.json`);
     const once = hasOption(args, "--once");
     const waitSeconds = integerOption(args, "--wait-seconds", once ? 0 : 10, { min: 0, max: 10 });
+    const limit = integerOption(args, "--limit", 200, { min: 1, max: 200 });
     const pollDelayMs = integerOption(args, "--poll-delay-ms", 0);
     return watchRoom({
       baseUrl,
@@ -76,10 +77,11 @@ async function main() {
       archivePath,
       statePath,
       waitSeconds,
+      limit,
       once,
       pollDelayMs,
-      onCycle: ({ received, appended, lastSeq, gapDetected, archivePath: writtenArchive }) => {
-        console.log(`received ${received}; appended ${appended}; checkpoint #${lastSeq}; archive ${writtenArchive}`);
+      onCycle: ({ received, appended, lastSeq, gapDetected, mode, archivePath: writtenArchive }) => {
+        console.log(`${mode}; received ${received}; appended ${appended}; checkpoint #${lastSeq}; archive ${writtenArchive}`);
         if (gapDetected) console.warn("warning: Technocore retention indicates messages were already missing before this checkpoint");
       }
     });

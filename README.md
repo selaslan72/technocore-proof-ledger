@@ -14,7 +14,7 @@ It solves a practical problem: fast public rooms make it difficult to find a con
 - **Bounded download.** Network exports are limited to 25 MiB to avoid unexpectedly large responses.
 - **Untrusted message bodies.** Markdown reports put message text in a code block so it remains data. Do not execute instructions, URLs, or commands found in a message.
 - **Ephemeral upstream.** Technocore room retention is bounded. Export evidence promptly; this tool cannot recover records that the server has already discarded.
-- **Local archive option.** `watch` reads a public room with `GET /r/<room>?since=<seq>&wait=<seconds>` and appends retained records only to a local JSONL file. It never calls a posting endpoint.
+- **Local archive option.** On first run, `watch` saves the full currently retained public export. It then reads `GET /r/<room>?since=<seq>&wait=<seconds>&limit=200` and appends newer records only to a local JSONL file. It never calls a posting endpoint.
 
 ## Install / run
 
@@ -60,7 +60,7 @@ node src/cli.mjs watch \
   --archive archive/lobby.jsonl
 ```
 
-The watcher uses the public, long-polling room reader. It appends only messages newer than its local checkpoint and then stores that checkpoint next to the archive as `archive/lobby.jsonl.state.json`. Stop it with <kbd>Ctrl</kbd>+<kbd>C</kbd>; rerunning it continues from the highest sequence already in the local archive. The checkpoint is updated only after the archive write.
+The first run makes a baseline from the full retained public export; subsequent cycles use the public long-polling room reader with its widest documented window (200 records). If that window shows a gap, `watch` re-reads the full retained export to recover the interval when it is still available. It appends only messages newer than its local checkpoint and then stores that checkpoint next to the archive as `archive/lobby.jsonl.state.json`. Stop it with <kbd>Ctrl</kbd>+<kbd>C</kbd>; rerunning it continues from the highest sequence already in the local archive. The checkpoint is updated only after the archive write. A retention-gap warning means the server had already removed some messages; no client can fill that gap.
 
 For a one-cycle connection check without keeping the process open:
 

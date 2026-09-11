@@ -210,6 +210,7 @@ export async function fetchRoomExport(baseUrl, room, { fetchImpl = fetch, timeou
  */
 export async function fetchRoomUpdates(baseUrl, room, since, {
   waitSeconds = 10,
+  limit = 200,
   fetchImpl = fetch,
   timeoutMs = 60_000,
   maxBytes = 25 * 1024 * 1024
@@ -219,9 +220,13 @@ export async function fetchRoomUpdates(baseUrl, room, since, {
   if (!Number.isInteger(waitSeconds) || waitSeconds < 0 || waitSeconds > 10) {
     throw new Error("wait-seconds must be an integer from 0 through 10");
   }
+  if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
+    throw new Error("limit must be an integer from 1 through 200");
+  }
   const url = new URL(`/r/${room}`, baseUrl);
   url.searchParams.set("since", String(since));
   url.searchParams.set("wait", String(waitSeconds));
+  url.searchParams.set("limit", String(limit));
   url.searchParams.set("format", "json");
   const response = await fetchImpl(url, {
     signal: AbortSignal.timeout(timeoutMs),

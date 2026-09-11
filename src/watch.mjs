@@ -1,6 +1,6 @@
 import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { fetchRoomUpdates, parseJsonRecord, validateRoom } from "./ledger.mjs";
+import { fetchRoomExport, fetchRoomUpdates, parseJsonRecord, validateRoom } from "./ledger.mjs";
 
 const STATE_VERSION = 1;
 
@@ -137,6 +137,7 @@ export async function watchOnce({
   archivePath,
   statePath,
   waitSeconds = 10,
+  limit = 200,
   fetchImpl = fetch,
   timeoutMs = 60_000,
   maxBytes = 25 * 1024 * 1024,
@@ -146,10 +147,45 @@ export async function watchOnce({
   const archive = resolve(archivePath);
   const stateFile = resolve(statePath);
   const savedState = await loadState(stateFile, { baseUrl, room });
+  const existingArchive = await optionalRead(archive);
   const archiveSeq = await archiveHighWaterMark(archive);
   const since = Math.max(savedState?.lastSeq ?? 0, archiveSeq);
-  const response = await fetchRoomUpdates(baseUrl, room, since, { waitSeconds, fetchImpl, timeoutMs, maxBytes });
-  const { entries: parsedEntries, firstSeq } = responseEntries(response);
+  if (existingArchive === undefined && savedState === undefined) {
+    // Capture the full retained ring before starting the narrower live reader.
+    // This gives a new archive the best available baseline without claiming it
+    // can resurrect messages already evicted by Technocore.
+    const snapshot = await fetchRoomExport(baseUrl, room, { fetchImpl, timeoutMs, maxBytes });
+    const parsedEntries = archiveEntries(snapshot);
+    if (parsedEntries.length) {
+      await mkdir(dirname(archive), { recursive: true });
+      await appendFile(archive, `${parsedEntries.map((entry) => entry.line).join("\n")}\n`, { mode: 0o600 });
+    }
+    const lastSeq = parsedEntries.reduce((highest, entry) => Math.max(highest, entry.seq), 0);
+    const state = { schemaVersion: STATE_VERSION, baseUrl: new URL(baseUrl).origin, room, lastSeq, updatedAt: now() };
+    await saveState(stateFile, state);
+    return {
+      received: parsedEntries.length,
+      appended: parsedEntries.length,
+      lastSeq,
+      gapDetected: parsedEntries.length > 0 && parsedEntries[0].seq > 1,
+      mode: "snapshot",
+      archivePath: archive,
+      statePath: stateFile
+    };
+  }
+  const response = await fetchRoomUpdates(baseUrl, room, since, { waitSeconds, limit, fetchImpl, timeoutMs, maxBytes });
+  let { entries: parsedEntries, firstSeq } = responseEntries(response);
+  let mode = "updates";
+  if (Number.isSafeInteger(firstSeq) && firstSeq > since + 1) {
+    // The tail window was not wide enough to cover the cursor gap. The export
+    // is the complete retained ring, so it can often recover that interval.
+    // It remains a GET-only operation; a gap that is absent even from export is
+    // reported below rather than silently treated as an archive success.
+    const recovery = await fetchRoomExport(baseUrl, room, { fetchImpl, timeoutMs, maxBytes });
+    parsedEntries = archiveEntries(recovery);
+    firstSeq = parsedEntries.reduce((lowest, entry) => Math.min(lowest, entry.seq), Infinity);
+    mode = "recovery";
+  }
   const bySeq = new Map();
   for (const entry of parsedEntries) {
     if (entry.seq > since && !bySeq.has(entry.seq)) bySeq.set(entry.seq, entry);
@@ -169,8 +205,8 @@ export async function watchOnce({
     updatedAt: now()
   };
   await saveState(stateFile, state);
-  const gapDetected = Number.isSafeInteger(firstSeq) && firstSeq > since + 1;
-  return { received: parsedEntries.length, appended: entries.length, lastSeq, gapDetected, archivePath: archive, statePath: stateFile };
+  const gapDetected = Number.isFinite(firstSeq) && firstSeq > since + 1;
+  return { received: parsedEntries.length, appended: entries.length, lastSeq, gapDetected, mode, archivePath: archive, statePath: stateFile };
 }
 
 export async function watchRoom(options) {

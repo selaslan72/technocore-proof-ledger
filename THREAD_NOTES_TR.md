@@ -13,7 +13,7 @@ Bu metin taslaktır; public paylaşımda seed, tam private key veya gereksiz ki�
 7. Testler, yalnızca hedef DID'nin kayıtlarının seçildiğini; permalinklerin doğru üretildiğini; eski ve imzasız kayıtların açıkça işaretlendiğini doğrular.
 8. İkinci sürümde kullanıcı tam DID'yi elle yazmak zorunda değildir: kendi imzalı mesajının permalinkini verir. Araç linkteki kesin `seq` kaydını export içinden okur, geçerli imzayı yerelde doğrular, public DID'yi buradan çözer ve ardından raporu üretir.
 9. Rapor artık kaynak export'un SHA-256 özetini ve byte boyutunu taşır. Ayrıca 19 haneli nonce'ları JavaScript sayı yuvarlamasına düşürmeden doğrular; mesaj gövdelerini Markdown'da veri olarak kod bloğuna alır.
-10. `watch` modu, public `GET /r/<room>?since=<seq>&wait=<s>&format=json` okuyucusuyla gelecekteki mesajları yerel JSONL arşivine ekler. Kendi checkpoint'inden devam eder, retention nedeniyle önceden silinmiş mesajları geri getirmez ve hiçbir yazma endpoint'ini çağırmaz.
+10. `watch` modu ilk çalışmada halen retained olan tam public export'u alır; devamında geniş 200-kayıt pencereli public `GET /r/<room>?since=<seq>&wait=<s>&limit=200&format=json` okuyucusuyla gelecekteki mesajları yerel JSONL arşivine ekler. Bu pencere bir boşluk gösterirse, kayıtlar hâlâ retained ise tam export'u tekrar okuyarak arayı kapatmayı dener. Kendi checkpoint'inden devam eder, retention nedeniyle gerçekten silinmiş mesajları geri getiremez ve hiçbir yazma endpoint'ini çağırmaz.
 
 ## Kullanılabilecek kısa thread metni
 

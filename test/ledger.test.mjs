@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { generateKeyPairSync, sign } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fetchRoomExport, makeEvidence, parseJsonl, renderMarkdown, resolveDidFromPermalink } from "../src/ledger.mjs";
@@ -101,7 +101,10 @@ test("watch appends unseen public records and repairs its checkpoint from the lo
   const directory = await mkdtemp(join(tmpdir(), "technocore-proof-ledger-watch-"));
   const archivePath = join(directory, "lobby.jsonl");
   const statePath = join(directory, "lobby.state.json");
-  const firstBatch = `{"room":"lobby","count":2,"first_seq":7,"last_seq":8,"messages":[{"seq":7,"ts":"2026-09-11T10:00:00Z","from":"~nick","text":"public one","nonce":9223372036854775807},${JSON.stringify(signedRecord({ seq: 8, room: "lobby", nonce: "12", text: "public two" }))}]}`;
+  const initialSnapshot = [
+    '{"seq":7,"ts":"2026-09-11T10:00:00Z","from":"~nick","text":"public one","nonce":9223372036854775807}',
+    JSON.stringify(signedRecord({ seq: 8, room: "lobby", nonce: "12", text: "public two" }))
+  ].join("\n");
   const secondBatch = JSON.stringify({
     room: "lobby", count: 2, first_seq: 7, last_seq: 9,
     messages: [
@@ -112,23 +115,47 @@ test("watch appends unseen public records and repairs its checkpoint from the lo
   const requested = [];
   const fetchImpl = async (url, init) => {
     requested.push({ url: url.toString(), method: init.method });
-    return new Response(requested.length === 1 ? firstBatch : secondBatch, { status: 200 });
+    return new Response(url.pathname.endsWith("/export") ? initialSnapshot : secondBatch, { status: 200 });
   };
 
   try {
     const first = await watchOnce({ room: "lobby", archivePath, statePath, waitSeconds: 0, fetchImpl, now: () => "2026-09-11T10:01:00Z" });
     const second = await watchOnce({ room: "lobby", archivePath, statePath, waitSeconds: 0, fetchImpl, now: () => "2026-09-11T10:02:00Z" });
     assert.deepEqual(requested, [
-      { url: "https://technocore.chat/r/lobby?since=0&wait=0&format=json", method: undefined },
-      { url: "https://technocore.chat/r/lobby?since=8&wait=0&format=json", method: undefined }
+      { url: "https://technocore.chat/r/lobby/export", method: undefined },
+      { url: "https://technocore.chat/r/lobby?since=8&wait=0&limit=200&format=json", method: undefined }
     ]);
+    assert.equal(first.mode, "snapshot");
     assert.equal(first.appended, 2);
     assert.equal(second.appended, 1);
     assert.equal(second.lastSeq, 9);
     assert.equal(first.gapDetected, true);
     assert.equal((await readFile(archivePath, "utf8")).trim().split("\n").length, 3);
-    assert.match(await readFile(archivePath, "utf8"), /"nonce":"9223372036854775807"/);
+    assert.equal(parseJsonl(await readFile(archivePath, "utf8"))[0].nonce, "9223372036854775807");
     assert.equal(JSON.parse(await readFile(statePath, "utf8")).lastSeq, 9);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("watch recovers a tail-window gap from the complete retained export", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "technocore-proof-ledger-recovery-"));
+  const archivePath = join(directory, "lobby.jsonl");
+  const statePath = join(directory, "lobby.state.json");
+  const record = (seq) => ({ seq, ts: "2026-09-11T10:00:00Z", from: "~nick", text: `public ${seq}` });
+  await writeFile(archivePath, `${JSON.stringify(record(10))}\n`);
+  await writeFile(statePath, JSON.stringify({ schemaVersion: 1, baseUrl: "https://technocore.chat", room: "lobby", lastSeq: 10 }));
+  const tail = JSON.stringify({ room: "lobby", count: 1, first_seq: 20, last_seq: 20, messages: [record(20)] });
+  const retainedExport = Array.from({ length: 10 }, (_, index) => JSON.stringify(record(index + 11))).join("\n");
+  const fetchImpl = async (url) => new Response(url.pathname.endsWith("/export") ? retainedExport : tail, { status: 200 });
+
+  try {
+    const result = await watchOnce({ room: "lobby", archivePath, statePath, waitSeconds: 0, fetchImpl });
+    assert.equal(result.mode, "recovery");
+    assert.equal(result.gapDetected, false);
+    assert.equal(result.appended, 10);
+    const sequences = parseJsonl(await readFile(archivePath, "utf8")).map((item) => item.seq);
+    assert.deepEqual(sequences, Array.from({ length: 11 }, (_, index) => index + 10));
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
