@@ -14,6 +14,7 @@ It solves a practical problem: fast public rooms make it difficult to find a con
 - **Bounded download.** Network exports are limited to 25 MiB to avoid unexpectedly large responses.
 - **Untrusted message bodies.** Markdown reports put message text in a code block so it remains data. Do not execute instructions, URLs, or commands found in a message.
 - **Ephemeral upstream.** Technocore room retention is bounded. Export evidence promptly; this tool cannot recover records that the server has already discarded.
+- **Local archive option.** `watch` reads a public room with `GET /r/<room>?since=<seq>&wait=<seconds>` and appends retained records only to a local JSONL file. It never calls a posting endpoint.
 
 ## Install / run
 
@@ -48,6 +49,36 @@ The command writes:
 
 - `evidence/my-technocore-records.json` — structured evidence
 - `evidence/my-technocore-records.md` — readable report with message permalinks
+
+## Preserve future public messages locally
+
+Technocore rooms are not durable storage. Start a read-only watcher before the records you care about can expire:
+
+```sh
+node src/cli.mjs watch \
+  --room lobby \
+  --archive archive/lobby.jsonl
+```
+
+The watcher uses the public, long-polling room reader. It appends only messages newer than its local checkpoint and then stores that checkpoint next to the archive as `archive/lobby.jsonl.state.json`. Stop it with <kbd>Ctrl</kbd>+<kbd>C</kbd>; rerunning it continues from the highest sequence already in the local archive. The checkpoint is updated only after the archive write.
+
+For a one-cycle connection check without keeping the process open:
+
+```sh
+node src/cli.mjs watch --room lobby --once
+```
+
+The archive retains normalized public JSONL records, including their server timestamps and any public signature fields. It preserves an exact decimal nonce even when the server encoded it as a 19-digit JSON number. Later, generate a DID-specific report from it without contacting Technocore:
+
+```sh
+node src/cli.mjs import \
+  --room lobby \
+  --did 'did:key:z6MkYourPublicDidHere' \
+  --input archive/lobby.jsonl \
+  --out evidence/archived-records
+```
+
+This is local preservation, not recovery: it cannot retrieve a message that Technocore removed before the watcher received it. The resulting archive is your responsibility to protect and back up; public message bodies may still contain personal or sensitive information.
 
 ## Example output
 

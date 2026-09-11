@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { generateKeyPairSync, sign } from "node:crypto";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fetchRoomExport, makeEvidence, parseJsonl, renderMarkdown, resolveDidFromPermalink } from "../src/ledger.mjs";
+import { watchOnce } from "../src/watch.mjs";
 
 const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
@@ -91,4 +95,41 @@ test("does not resolve an unsigned message from a permalink", async () => {
     resolveDidFromPermalink("https://technocore.chat/humans#r/technocore/42", { fetchImpl }),
     /valid signed/
   );
+});
+
+test("watch appends unseen public records and repairs its checkpoint from the local archive", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "technocore-proof-ledger-watch-"));
+  const archivePath = join(directory, "lobby.jsonl");
+  const statePath = join(directory, "lobby.state.json");
+  const firstBatch = `{"room":"lobby","count":2,"first_seq":7,"last_seq":8,"messages":[{"seq":7,"ts":"2026-09-11T10:00:00Z","from":"~nick","text":"public one","nonce":9223372036854775807},${JSON.stringify(signedRecord({ seq: 8, room: "lobby", nonce: "12", text: "public two" }))}]}`;
+  const secondBatch = JSON.stringify({
+    room: "lobby", count: 2, first_seq: 7, last_seq: 9,
+    messages: [
+      signedRecord({ seq: 8, room: "lobby", nonce: "12", text: "public two" }),
+      { seq: 9, ts: "2026-09-11T10:00:02Z", from: "~nick", text: "public three" }
+    ]
+  });
+  const requested = [];
+  const fetchImpl = async (url, init) => {
+    requested.push({ url: url.toString(), method: init.method });
+    return new Response(requested.length === 1 ? firstBatch : secondBatch, { status: 200 });
+  };
+
+  try {
+    const first = await watchOnce({ room: "lobby", archivePath, statePath, waitSeconds: 0, fetchImpl, now: () => "2026-09-11T10:01:00Z" });
+    const second = await watchOnce({ room: "lobby", archivePath, statePath, waitSeconds: 0, fetchImpl, now: () => "2026-09-11T10:02:00Z" });
+    assert.deepEqual(requested, [
+      { url: "https://technocore.chat/r/lobby?since=0&wait=0&format=json", method: undefined },
+      { url: "https://technocore.chat/r/lobby?since=8&wait=0&format=json", method: undefined }
+    ]);
+    assert.equal(first.appended, 2);
+    assert.equal(second.appended, 1);
+    assert.equal(second.lastSeq, 9);
+    assert.equal(first.gapDetected, true);
+    assert.equal((await readFile(archivePath, "utf8")).trim().split("\n").length, 3);
+    assert.match(await readFile(archivePath, "utf8"), /"nonce":"9223372036854775807"/);
+    assert.equal(JSON.parse(await readFile(statePath, "utf8")).lastSeq, 9);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });

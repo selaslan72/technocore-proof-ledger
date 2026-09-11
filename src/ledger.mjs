@@ -26,17 +26,20 @@ export function parseJsonl(jsonl) {
   return jsonl
     .split(/\r?\n/)
     .filter(Boolean)
-    .map((line, index) => {
-      try {
-        const record = JSON.parse(line);
-        // A valid Technocore nonce can be 19 digits, which exceeds JavaScript's
-        // exact Number range. Preserve its raw decimal spelling for verification.
-        if (record && typeof record === "object" && "nonce" in record) record.nonce = nonceFromJsonLine(line);
-        return record;
-      } catch {
-        throw new Error(`invalid JSONL record at line ${index + 1}`);
-      }
-    });
+    .map((line, index) => parseJsonRecord(line, index + 1));
+}
+
+/** Parse one public JSON record while retaining a possibly 19-digit nonce. */
+export function parseJsonRecord(json, lineNumber = 1) {
+  try {
+    const record = JSON.parse(json);
+    // A valid Technocore nonce can be 19 digits, which exceeds JavaScript's
+    // exact Number range. Preserve its raw decimal spelling for verification.
+    if (record && typeof record === "object" && "nonce" in record) record.nonce = nonceFromJsonLine(json);
+    return record;
+  } catch {
+    throw new Error(`invalid JSONL record at line ${lineNumber}`);
+  }
 }
 
 function nonceFromJsonLine(line) {
@@ -197,6 +200,40 @@ export async function fetchRoomExport(baseUrl, room, { fetchImpl = fetch, timeou
   }
   const jsonl = await response.text();
   if (Buffer.byteLength(jsonl) > maxBytes) throw new Error(`Technocore export exceeds the ${maxBytes}-byte safety limit`);
+  return jsonl;
+}
+
+/**
+ * Read public messages newer than a known room sequence. This is deliberately
+ * a GET-only companion to fetchRoomExport: it never uses a say/say-signed
+ * endpoint and it does not need any identity material.
+ */
+export async function fetchRoomUpdates(baseUrl, room, since, {
+  waitSeconds = 10,
+  fetchImpl = fetch,
+  timeoutMs = 60_000,
+  maxBytes = 25 * 1024 * 1024
+} = {}) {
+  validateRoom(room);
+  if (!Number.isSafeInteger(since) || since < 0) throw new Error("since must be a non-negative safe integer");
+  if (!Number.isInteger(waitSeconds) || waitSeconds < 0 || waitSeconds > 10) {
+    throw new Error("wait-seconds must be an integer from 0 through 10");
+  }
+  const url = new URL(`/r/${room}`, baseUrl);
+  url.searchParams.set("since", String(since));
+  url.searchParams.set("wait", String(waitSeconds));
+  url.searchParams.set("format", "json");
+  const response = await fetchImpl(url, {
+    signal: AbortSignal.timeout(timeoutMs),
+    headers: { accept: "application/json" }
+  });
+  if (!response.ok) throw new Error(`Technocore returned HTTP ${response.status}`);
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    throw new Error(`Technocore update response exceeds the ${maxBytes}-byte safety limit`);
+  }
+  const jsonl = await response.text();
+  if (Buffer.byteLength(jsonl) > maxBytes) throw new Error(`Technocore update response exceeds the ${maxBytes}-byte safety limit`);
   return jsonl;
 }
 

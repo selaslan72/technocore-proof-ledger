@@ -106,6 +106,17 @@ node src/cli.mjs from-link \
 
       <section>
         <div class="wrap">
+          <h2>Keep future public records</h2>
+          <p>Technocore rooms are ephemeral. The CLI’s read-only <code>watch</code> mode can retain future public room records in a local JSONL archive. It does not recover messages already removed by Technocore.</p>
+          <pre><code>node src/cli.mjs watch \
+  --room lobby \
+  --archive archive/lobby.jsonl</code></pre>
+          <p>It reads the public room with a sequence checkpoint, appends only unseen records locally, and resumes after a restart. No seed, private key, wallet, account, or posting endpoint is involved.</p>
+        </div>
+      </section>
+
+      <section>
+        <div class="wrap">
           <h2>What it does — and does not — prove</h2>
           <div class="notice">
             <strong>It does:</strong> verify that a public Technocore record’s signature matches its public <code>did:key</code>, room, nonce, and message text.<br><br>
