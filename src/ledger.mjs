@@ -189,18 +189,39 @@ export function renderMarkdown(evidence) {
   return `${lines.join("\n")}\n`;
 }
 
-export async function fetchRoomExport(baseUrl, room, { fetchImpl = fetch, timeoutMs = 60_000, maxBytes = 25 * 1024 * 1024 } = {}) {
+function requestSignal(timeoutMs, externalSignal) {
+  if (!externalSignal) return { signal: AbortSignal.timeout(timeoutMs), dispose: () => {} };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const abort = () => controller.abort();
+  externalSignal.addEventListener("abort", abort, { once: true });
+  if (externalSignal.aborted) abort();
+  return {
+    signal: controller.signal,
+    dispose: () => {
+      clearTimeout(timeout);
+      externalSignal.removeEventListener("abort", abort);
+    }
+  };
+}
+
+export async function fetchRoomExport(baseUrl, room, { fetchImpl = fetch, timeoutMs = 60_000, maxBytes = 25 * 1024 * 1024, signal: externalSignal } = {}) {
   validateRoom(room);
   const url = new URL(`/r/${room}/export`, baseUrl);
-  const response = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs), headers: { accept: "application/x-ndjson, text/plain" } });
-  if (!response.ok) throw new Error(`Technocore returned HTTP ${response.status}`);
-  const declaredLength = Number(response.headers.get("content-length"));
-  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
-    throw new Error(`Technocore export exceeds the ${maxBytes}-byte safety limit`);
+  const request = requestSignal(timeoutMs, externalSignal);
+  try {
+    const response = await fetchImpl(url, { signal: request.signal, headers: { accept: "application/x-ndjson, text/plain" } });
+    if (!response.ok) throw new Error(`Technocore returned HTTP ${response.status}`);
+    const declaredLength = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+      throw new Error(`Technocore export exceeds the ${maxBytes}-byte safety limit`);
+    }
+    const jsonl = await response.text();
+    if (Buffer.byteLength(jsonl) > maxBytes) throw new Error(`Technocore export exceeds the ${maxBytes}-byte safety limit`);
+    return jsonl;
+  } finally {
+    request.dispose();
   }
-  const jsonl = await response.text();
-  if (Buffer.byteLength(jsonl) > maxBytes) throw new Error(`Technocore export exceeds the ${maxBytes}-byte safety limit`);
-  return jsonl;
 }
 
 /**
@@ -213,7 +234,8 @@ export async function fetchRoomUpdates(baseUrl, room, since, {
   limit = 200,
   fetchImpl = fetch,
   timeoutMs = 60_000,
-  maxBytes = 25 * 1024 * 1024
+  maxBytes = 25 * 1024 * 1024,
+  signal: externalSignal
 } = {}) {
   validateRoom(room);
   if (!Number.isSafeInteger(since) || since < 0) throw new Error("since must be a non-negative safe integer");
@@ -228,18 +250,23 @@ export async function fetchRoomUpdates(baseUrl, room, since, {
   url.searchParams.set("wait", String(waitSeconds));
   url.searchParams.set("limit", String(limit));
   url.searchParams.set("format", "json");
-  const response = await fetchImpl(url, {
-    signal: AbortSignal.timeout(timeoutMs),
-    headers: { accept: "application/json" }
-  });
-  if (!response.ok) throw new Error(`Technocore returned HTTP ${response.status}`);
-  const declaredLength = Number(response.headers.get("content-length"));
-  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
-    throw new Error(`Technocore update response exceeds the ${maxBytes}-byte safety limit`);
+  const request = requestSignal(timeoutMs, externalSignal);
+  try {
+    const response = await fetchImpl(url, {
+      signal: request.signal,
+      headers: { accept: "application/json" }
+    });
+    if (!response.ok) throw new Error(`Technocore returned HTTP ${response.status}`);
+    const declaredLength = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+      throw new Error(`Technocore update response exceeds the ${maxBytes}-byte safety limit`);
+    }
+    const jsonl = await response.text();
+    if (Buffer.byteLength(jsonl) > maxBytes) throw new Error(`Technocore update response exceeds the ${maxBytes}-byte safety limit`);
+    return jsonl;
+  } finally {
+    request.dispose();
   }
-  const jsonl = await response.text();
-  if (Buffer.byteLength(jsonl) > maxBytes) throw new Error(`Technocore update response exceeds the ${maxBytes}-byte safety limit`);
-  return jsonl;
 }
 
 /** Resolve a public DID from the exact signed message named by a permalink. */

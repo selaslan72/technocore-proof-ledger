@@ -5,7 +5,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fetchRoomExport, makeEvidence, parseJsonl, renderMarkdown, resolveDidFromPermalink } from "../src/ledger.mjs";
-import { watchOnce } from "../src/watch.mjs";
+import { watchOnce, watchRoom } from "../src/watch.mjs";
 
 const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
@@ -156,6 +156,28 @@ test("watch recovers a tail-window gap from the complete retained export", async
     assert.equal(result.appended, 10);
     const sequences = parseJsonl(await readFile(archivePath, "utf8")).map((item) => item.seq);
     assert.deepEqual(sequences, Array.from({ length: 11 }, (_, index) => index + 10));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("watch stops cleanly when its local controller is aborted", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "technocore-proof-ledger-stop-"));
+  const controller = new AbortController();
+  const fetchImpl = async (_url, { signal }) => new Promise((_resolve, reject) => {
+    if (signal.aborted) reject(new Error("aborted"));
+    else signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+  });
+  try {
+    const running = watchRoom({
+      room: "lobby",
+      archivePath: join(directory, "lobby.jsonl"),
+      statePath: join(directory, "lobby.state.json"),
+      fetchImpl,
+      signal: controller.signal
+    });
+    controller.abort();
+    assert.equal(await running, undefined);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

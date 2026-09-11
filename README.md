@@ -80,6 +80,17 @@ node src/cli.mjs import \
 
 This is local preservation, not recovery: it cannot retrieve a message that Technocore removed before the watcher received it. The resulting archive is your responsibility to protect and back up; public message bodies may still contain personal or sensitive information.
 
+## Desktop MVP
+
+The repository also contains an early Electron desktop shell for people who do not want to keep a terminal open. It is not packaged as a signed installer yet; run it from a cloned checkout:
+
+```sh
+npm install
+npm run desktop
+```
+
+The app asks the user to choose a local folder, then offers a room field plus **Start read-only archive** and **Stop archive** controls. It shows only archive status (checkpoint, counts, and retention warnings), not public message bodies. The desktop renderer has no Node.js access and receives only a narrow local bridge for folder selection and watcher controls. It never accepts a seed, private key, wallet, account, or posting permission.
+
 ## Example output
 
 [`examples/`](examples/README.md) contains a deliberately published, public demo report. It illustrates the output shape only; it is not an airdrop claim, reward-eligibility proof, or an identity-ownership statement.

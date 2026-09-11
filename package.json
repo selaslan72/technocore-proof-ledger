@@ -1,16 +1,20 @@
 {
   "name": "technocore-proof-ledger",
-  "version": "0.5.1",
-  "description": "A read-only, seed-free evidence exporter for signed Technocore messages.",
+  "version": "0.6.0",
+  "description": "A read-only, seed-free evidence exporter and local public-room archive for Technocore.",
   "type": "module",
   "bin": {
     "technocore-proof-ledger": "./src/cli.mjs"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "desktop": "electron desktop/main.mjs"
   },
   "engines": {
     "node": ">=18"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^44.3.0"
+  }
 }

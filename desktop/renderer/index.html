@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'self'; base-uri 'none'; form-action 'none'">
+    <title>Technocore Archive</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">Technocore Proof Ledger</p>
+        <h1>Keep future public records.</h1>
+        <p class="lead">A local, read-only archive. It never asks for a seed, private key, wallet, account, or message-signing permission.</p>
+      </header>
+
+      <section class="card" aria-labelledby="setup-title">
+        <h2 id="setup-title">Start an archive</h2>
+        <label for="room">Public room</label>
+        <input id="room" value="lobby" pattern="[a-z0-9][a-z0-9_-]{0,47}" autocomplete="off">
+        <label for="directory">Local archive folder</label>
+        <div class="row">
+          <input id="directory" placeholder="Choose where JSONL records stay" readonly>
+          <button id="choose-directory" class="secondary">Choose folder</button>
+        </div>
+        <div class="row actions">
+          <button id="start" class="primary" disabled>Start read-only archive</button>
+          <button id="open-folder" class="secondary" disabled>Open folder</button>
+        </div>
+        <p id="notice" class="notice" aria-live="polite">Choose a local folder. The first run saves the currently retained public export, then follows new records.</p>
+      </section>
+
+      <section class="card" aria-labelledby="status-title">
+        <div class="section-heading"><h2 id="status-title">Archive status</h2><span class="badge">Local only</span></div>
+        <div id="empty-state" class="empty">No public room is being archived yet.</div>
+        <div id="watch-list" class="watch-list" aria-live="polite"></div>
+      </section>
+
+      <section class="security">
+        <strong>What this app does not do:</strong> it does not connect a wallet, import a seed, access browser storage, sign a message, or call a Technocore posting endpoint. A retention warning means some older public records were already unavailable from the server.
+      </section>
+    </main>
+    <script src="renderer.js"></script>
+  </body>
+</html>

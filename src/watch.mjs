@@ -141,6 +141,7 @@ export async function watchOnce({
   fetchImpl = fetch,
   timeoutMs = 60_000,
   maxBytes = 25 * 1024 * 1024,
+  signal,
   now = () => new Date().toISOString()
 }) {
   validateRoom(room);
@@ -154,7 +155,7 @@ export async function watchOnce({
     // Capture the full retained ring before starting the narrower live reader.
     // This gives a new archive the best available baseline without claiming it
     // can resurrect messages already evicted by Technocore.
-    const snapshot = await fetchRoomExport(baseUrl, room, { fetchImpl, timeoutMs, maxBytes });
+    const snapshot = await fetchRoomExport(baseUrl, room, { fetchImpl, timeoutMs, maxBytes, signal });
     const parsedEntries = archiveEntries(snapshot);
     if (parsedEntries.length) {
       await mkdir(dirname(archive), { recursive: true });
@@ -173,7 +174,7 @@ export async function watchOnce({
       statePath: stateFile
     };
   }
-  const response = await fetchRoomUpdates(baseUrl, room, since, { waitSeconds, limit, fetchImpl, timeoutMs, maxBytes });
+  const response = await fetchRoomUpdates(baseUrl, room, since, { waitSeconds, limit, fetchImpl, timeoutMs, maxBytes, signal });
   let { entries: parsedEntries, firstSeq } = responseEntries(response);
   let mode = "updates";
   if (Number.isSafeInteger(firstSeq) && firstSeq > since + 1) {
@@ -181,7 +182,7 @@ export async function watchOnce({
     // is the complete retained ring, so it can often recover that interval.
     // It remains a GET-only operation; a gap that is absent even from export is
     // reported below rather than silently treated as an archive success.
-    const recovery = await fetchRoomExport(baseUrl, room, { fetchImpl, timeoutMs, maxBytes });
+    const recovery = await fetchRoomExport(baseUrl, room, { fetchImpl, timeoutMs, maxBytes, signal });
     parsedEntries = archiveEntries(recovery);
     firstSeq = parsedEntries.reduce((lowest, entry) => Math.min(lowest, entry.seq), Infinity);
     mode = "recovery";
@@ -210,11 +211,21 @@ export async function watchOnce({
 }
 
 export async function watchRoom(options) {
-  const { once = false, pollDelayMs = 0, onCycle = () => {} } = options;
-  do {
-    const result = await watchOnce(options);
-    onCycle(result);
-    if (once) return result;
-    if (pollDelayMs > 0) await new Promise((resolveDelay) => setTimeout(resolveDelay, pollDelayMs));
-  } while (true);
+  const { once = false, pollDelayMs = 0, onCycle = () => {}, onError, signal } = options;
+  while (!signal?.aborted) {
+    try {
+      const result = await watchOnce(options);
+      onCycle(result);
+      if (once || signal?.aborted) return result;
+      if (pollDelayMs > 0) await new Promise((resolveDelay) => setTimeout(resolveDelay, pollDelayMs));
+    } catch (error) {
+      if (signal?.aborted) return undefined;
+      if (onError) {
+        onError(error);
+        return undefined;
+      }
+      throw error;
+    }
+  }
+  return undefined;
 }
