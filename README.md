@@ -80,6 +80,8 @@ node src/cli.mjs import \
 
 This is local preservation, not recovery: it cannot retrieve a message that Technocore removed before the watcher received it. The resulting archive is your responsibility to protect and back up; public message bodies may still contain personal or sensitive information.
 
+Reports made with `import` label their source as a **local public JSONL archive**. They include that exact archive's SHA-256 and byte length, but do not imply that the CLI fetched or independently authenticated it when the report was generated. Signature checks still apply to each retained signed record.
+
 ## Desktop MVP
 
 The repository also contains an early Electron desktop shell for people who do not want to keep a terminal open. It is not packaged as a signed installer yet; run it from a cloned checkout:

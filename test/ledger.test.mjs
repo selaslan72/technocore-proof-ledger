@@ -65,6 +65,30 @@ test("renders untrusted message text as a code block", () => {
   assert.match(renderMarkdown(evidence), /````\n# not a heading\n```\nuntrusted\n````/);
 });
 
+test("labels an imported archive without claiming a fresh upstream fetch", () => {
+  const archive = JSON.stringify(signedRecord({ seq: 8 }));
+  const evidence = makeEvidence({
+    baseUrl: "https://technocore.chat",
+    room: "technocore",
+    did,
+    records: parseJsonl(archive),
+    sourceJsonl: archive,
+    sourceType: "local-public-archive",
+    fetchedAt: "2026-09-11T00:00:00Z"
+  });
+  assert.equal(evidence.source.type, "local-public-archive");
+  assert.equal("endpoint" in evidence.source, false);
+  assert.match(renderMarkdown(evidence), /local public JSONL archive/);
+  assert.match(renderMarkdown(evidence), /not fetched while generating this report/);
+});
+
+test("rejects an unknown evidence source type", () => {
+  assert.throws(
+    () => makeEvidence({ baseUrl: "https://technocore.chat", room: "technocore", did, records: [], sourceType: "untrusted" }),
+    /sourceType/
+  );
+});
+
 test("rejects malformed JSONL", () => {
   assert.throws(() => parseJsonl('{not json}'), /line 1/);
 });

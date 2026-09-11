@@ -106,7 +106,14 @@ async function main() {
     jsonl = await readFile(input, "utf8");
   } else if (command !== "from-link") throw new Error(`unknown command: ${command}`);
   if (!records) records = parseJsonl(jsonl);
-  await writeEvidence(out, makeEvidence({ baseUrl, room, did, records, sourceJsonl: jsonl }));
+  await writeEvidence(out, makeEvidence({
+    baseUrl,
+    room,
+    did,
+    records,
+    sourceJsonl: jsonl,
+    sourceType: command === "import" ? "local-public-archive" : "public-room-export"
+  }));
 }
 
 main().catch((error) => {

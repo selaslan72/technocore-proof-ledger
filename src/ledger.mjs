@@ -131,9 +131,27 @@ export function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-export function makeEvidence({ baseUrl, room, did, records, sourceJsonl, fetchedAt = new Date().toISOString() }) {
+/**
+ * Build a report from public records.
+ *
+ * `sourceType` distinguishes a fresh public export from a locally supplied
+ * archive. A local archive can still be useful evidence, but the report must
+ * not imply that it was fetched from Technocore at report-generation time.
+ */
+export function makeEvidence({
+  baseUrl,
+  room,
+  did,
+  records,
+  sourceJsonl,
+  sourceType = "public-room-export",
+  fetchedAt = new Date().toISOString()
+}) {
   validateRoom(room);
   validateDid(did);
+  if (!["public-room-export", "local-public-archive"].includes(sourceType)) {
+    throw new Error("sourceType must be public-room-export or local-public-archive");
+  }
   const signedRecords = selectSignedRecords(records, did, room).map((record) => ({
     seq: record.seq,
     ts: record.ts,
@@ -147,10 +165,11 @@ export function makeEvidence({ baseUrl, room, did, records, sourceJsonl, fetched
     schemaVersion: 1,
     generatedAt: fetchedAt,
     source: {
+      type: sourceType,
       baseUrl: new URL(baseUrl).origin,
       room,
       did,
-      endpoint: `/r/${room}/export`,
+      ...(sourceType === "public-room-export" ? { endpoint: `/r/${room}/export` } : {}),
       ...(typeof sourceJsonl === "string" ? {
         snapshotSha256: sha256(sourceJsonl),
         snapshotBytes: Buffer.byteLength(sourceJsonl)
@@ -168,18 +187,21 @@ function fenceFor(text) {
 }
 
 export function renderMarkdown(evidence) {
+  const source = evidence.source.type === "local-public-archive"
+    ? `local public JSONL archive (declared upstream: ${evidence.source.baseUrl}/r/${evidence.source.room}/export; not fetched while generating this report)`
+    : `${evidence.source.baseUrl}${evidence.source.endpoint}`;
   const lines = [
     "# Technocore signed-message evidence",
     "",
     `- Generated: ${evidence.generatedAt}`,
     `- DID: \`${evidence.source.did}\``,
     `- Room: \`${evidence.source.room}\``,
-    `- Source: ${evidence.source.baseUrl}${evidence.source.endpoint}`,
+    `- Source: ${source}`,
     `- Matching records: ${evidence.recordCount}`,
     `- Cryptographically verified records: ${evidence.signatureValidCount}`,
     ...(evidence.source.snapshotSha256 ? [`- Source snapshot SHA-256: \`${evidence.source.snapshotSha256}\``, `- Source snapshot bytes: ${evidence.source.snapshotBytes}`] : []),
     "",
-    "This report is read-only. It never creates, imports, transmits, or stores a private key or seed. `signature-valid` means this CLI verified the exported Ed25519 signature over the documented `room|nonce|text` bytes. It does not establish airdrop eligibility or reward entitlement.",
+    "This report is read-only. It never creates, imports, transmits, or stores a private key or seed. `signature-valid` means this CLI verified the supplied public record's Ed25519 signature over the documented `room|nonce|text` bytes. It does not establish airdrop eligibility or reward entitlement.",
     ""
   ];
   for (const record of evidence.records) {
