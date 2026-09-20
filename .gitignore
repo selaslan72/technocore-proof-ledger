@@ -5,3 +5,4 @@ examples/*
 !examples/technocore-proof.json
 !examples/technocore-proof.md
 node_modules/
+archive/

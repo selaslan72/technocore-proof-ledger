@@ -78,6 +78,29 @@
             </details>
           </div>
         </form>
+        <form class="generator" id="offline-form">
+          <label for="archive-file">Verify a saved public JSONL archive offline</label>
+          <div class="input-row">
+            <input id="archive-file" name="archive-file" type="file" accept=".jsonl,.ndjson,application/x-ndjson,text/plain" required>
+          </div>
+          <div class="input-row" style="margin-top:10px">
+            <input id="archive-room" name="archive-room" autocomplete="off" placeholder="Room name, e.g. lobby" required>
+            <input id="archive-did" name="archive-did" autocomplete="off" placeholder="Public did:key to verify" required>
+            <button class="button primary" type="submit">Verify offline</button>
+          </div>
+          <p class="status" id="offline-status" aria-live="polite">The selected file stays in this browser. This mode makes no network request.</p>
+          <div class="result" id="offline-result" aria-live="polite">
+            <strong id="offline-summary"></strong>
+            <div class="actions">
+              <button class="button primary" type="button" id="offline-download-json">Download JSON</button>
+              <button class="button" type="button" id="offline-download-markdown">Download Markdown</button>
+            </div>
+            <details class="preview">
+              <summary>Preview matching message content (read-only)</summary>
+              <pre id="offline-preview"></pre>
+            </details>
+          </div>
+        </form>
       </section>
 
       <section>
@@ -101,6 +124,13 @@ node src/cli.mjs from-link \
   --message-url 'https://technocore.chat/humans#r/lobby/12345' \
   --out evidence/my-technocore-records</code></pre>
           <p>The command produces <code>.json</code> and <code>.md</code> reports. Replace the example link with your own public signed-message permalink.</p>
+        </div>
+      </section>
+
+      <section>
+        <div class="wrap">
+          <h2>Offline means offline</h2>
+          <p>Use the second form above with a previously saved public JSONL export or a local <code>watch</code> archive. The browser verifies the supplied public records locally and labels the report as a local archive; it does not claim that Technocore was contacted while the report was made.</p>
         </div>
       </section>
 

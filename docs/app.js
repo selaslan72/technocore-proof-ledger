@@ -13,11 +13,32 @@ const summary = document.querySelector("#result-summary");
 const downloadJson = document.querySelector("#download-json");
 const downloadMarkdown = document.querySelector("#download-markdown");
 const preview = document.querySelector("#message-preview");
+const offlineForm = document.querySelector("#offline-form");
+const archiveFile = document.querySelector("#archive-file");
+const archiveRoom = document.querySelector("#archive-room");
+const archiveDid = document.querySelector("#archive-did");
+const offlineStatus = document.querySelector("#offline-status");
+const offlineResult = document.querySelector("#offline-result");
+const offlineSummary = document.querySelector("#offline-summary");
+const offlineDownloadJson = document.querySelector("#offline-download-json");
+const offlineDownloadMarkdown = document.querySelector("#offline-download-markdown");
+const offlinePreview = document.querySelector("#offline-preview");
 let generated;
+let offlineGenerated;
 
 function setStatus(message, isError = false) {
   status.textContent = message;
   status.classList.toggle("error", isError);
+}
+
+function setOfflineStatus(message, isError = false) {
+  offlineStatus.textContent = message;
+  offlineStatus.classList.toggle("error", isError);
+}
+
+function validateRoom(room) {
+  if (!/^[a-z0-9][a-z0-9_-]{0,47}$/.test(room)) throw new Error("Use a valid lowercase Technocore room name.");
+  return room;
 }
 
 function parsePermalink(value) {
@@ -144,10 +165,13 @@ function fenceFor(text) {
 }
 
 function markdown(evidence) {
+  const source = evidence.source.type === "local-public-archive"
+    ? `local public JSONL archive (declared upstream: ${evidence.source.baseUrl}/r/${evidence.source.room}/export; not fetched while generating this report)`
+    : `${evidence.source.baseUrl}${evidence.source.endpoint}`;
   const lines = [
     "# Technocore signed-message evidence", "", `- Generated: ${evidence.generatedAt}`,
     `- DID: \`${evidence.source.did}\``, `- Room: \`${evidence.source.room}\``,
-    `- Source: ${evidence.source.baseUrl}${evidence.source.endpoint}`,
+    `- Source: ${source}`,
     `- Matching records: ${evidence.recordCount}`, `- Cryptographically verified records: ${evidence.signatureValidCount}`,
     `- Source snapshot SHA-256: \`${evidence.source.snapshotSha256}\``, `- Source snapshot bytes: ${evidence.source.snapshotBytes}`, "",
     "This report was generated entirely in your browser from public data. It never uses a private key or seed. `signature-valid` means this page verified the exported Ed25519 signature over `room|nonce|text`. It does not establish airdrop eligibility or reward entitlement.", ""
@@ -215,5 +239,56 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
+offlineForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  offlineResult.classList.remove("visible");
+  try {
+    if (!crypto.subtle) throw new Error("Your browser does not support local cryptographic verification.");
+    const file = archiveFile.files?.[0];
+    if (!file) throw new Error("Choose a public JSONL archive first.");
+    if (file.size > MAX_EXPORT_BYTES) throw new Error("The selected archive is larger than the 25 MiB safety limit.");
+    const room = validateRoom(archiveRoom.value.trim());
+    const did = archiveDid.value.trim();
+    await keyFromDid(did);
+    setOfflineStatus("Reading the selected file and verifying signatures locally…");
+    const jsonl = await file.text();
+    if (encoder.encode(jsonl).byteLength > MAX_EXPORT_BYTES) throw new Error("The selected archive is larger than the 25 MiB safety limit.");
+    const records = parseJsonl(jsonl);
+    const selected = await Promise.all(records.filter((record) => record?.from === did).map(async (record) => ({
+      seq: record.seq, ts: record.ts, nonce: record.nonce, text: record.text, sig: record.sig,
+      verification: await verifyRecord(room, record), permalink: permalink(room, record.seq)
+    })));
+    if (!selected.length) throw new Error("The selected archive has no records for that public DID.");
+    offlineGenerated = {
+      schemaVersion: 1, generatedAt: new Date().toISOString(),
+      source: { type: "local-public-archive", baseUrl: BASE_URL, room, did, snapshotSha256: await sha256(jsonl), snapshotBytes: encoder.encode(jsonl).byteLength },
+      recordCount: selected.length, signatureValidCount: selected.filter((record) => record.verification === "signature-valid").length, records: selected
+    };
+    renderOfflinePreview(selected);
+    offlineSummary.textContent = `Found ${offlineGenerated.recordCount} matching archived records; ${offlineGenerated.signatureValidCount} are cryptographically verified.`;
+    offlineResult.classList.add("visible");
+    setOfflineStatus("Done. No network request was made; the report exists only in this browser until you download it.");
+  } catch (error) {
+    setOfflineStatus(error instanceof Error ? error.message : "Could not verify the selected archive.", true);
+  }
+});
+
+function renderOfflinePreview(records) {
+  const limit = 100;
+  const characterLimit = 200_000;
+  let text = "";
+  let shown = 0;
+  for (const record of records) {
+    const next = `#${record.seq} · ${record.ts}\n${String(record.text ?? "")}\n\n`;
+    if (shown === limit || text.length + next.length > characterLimit) break;
+    text += next;
+    shown += 1;
+  }
+  if (shown < records.length) text += `Preview limited to ${shown} records. Download a report for all ${records.length} records.\n`;
+  offlinePreview.textContent = text;
+}
+
 downloadJson.addEventListener("click", () => generated && download("technocore-proof.json", "application/json", `${JSON.stringify(generated, null, 2)}\n`));
 downloadMarkdown.addEventListener("click", () => generated && download("technocore-proof.md", "text/markdown", markdown(generated)));
+offlineDownloadJson.addEventListener("click", () => offlineGenerated && download("technocore-proof-archive.json", "application/json", `${JSON.stringify(offlineGenerated, null, 2)}\n`));
+offlineDownloadMarkdown.addEventListener("click", () => offlineGenerated && download("technocore-proof-archive.md", "text/markdown", markdown(offlineGenerated)));

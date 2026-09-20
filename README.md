@@ -103,6 +103,8 @@ Each CLI-produced report also contains the SHA-256 and byte length of the exact 
 
 The static project site is in [`docs/`](docs/index.html). It can generate JSON and Markdown evidence from a pasted **public** signed-message permalink. The browser reads the public Technocore export and verifies signatures locally; it does not connect a wallet, send a report to a server, or handle a seed/private key.
 
+It also has an **offline archive verifier**: select a previously saved public JSONL export or local `watch` archive, enter its room name and the public DID to inspect, and the browser verifies matching signatures without making a network request. Reports from this path are labelled `local-public-archive` and include the exact selected file's SHA-256 and byte length. That label is deliberate: a local archive can preserve public evidence, but it does not prove that the browser fetched it from Technocore while generating the report.
+
 To create a report from a previously downloaded export without any network access:
 
 ```sh
